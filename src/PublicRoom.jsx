@@ -13,6 +13,9 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
     const messagesEndRef = useRef(null);
     const lastMessageTime = useRef(0);
     const inputRef = useRef(null);
+    const chatContainerRef = useRef(null);
+    const shouldAutoScroll = useRef(false);
+    const prevMessagesLength = useRef(0);
     
     const joinedAt = useRef(Date.now());
     
@@ -36,6 +39,13 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
     }, [roomId]);
 
     useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = 'auto';
+        };
+    }, []);
+
+    useEffect(() => {
         const messagesRef = ref(database, `publicRooms/${roomId}/messages`);
         const messagesQuery = query(messagesRef, limitToLast(MAX_MESSAGES));
         
@@ -45,7 +55,7 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
                 const messageList = Object.entries(data).map(([id, msg]) => ({
                     id,
                     ...msg
-                })).sort((a, b) => a.timestamp - b.timestamp); // Sort by timestamp to assign z-index in order
+                })).sort((a, b) => a.timestamp - b.timestamp);
                 setMessages(messageList);
                 
                 const now = Date.now();
@@ -195,8 +205,32 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
     }, [roomId, username, myPosition.x, myPosition.y, myColor]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (chatContainerRef.current && messages.length > prevMessagesLength.current) {
+            const container = chatContainerRef.current;
+            const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 10;
+            
+            if (isAtBottom || shouldAutoScroll.current) {
+                setTimeout(() => {
+                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                }, 0);
+            }
+        }
+        
+        prevMessagesLength.current = messages.length;
     }, [messages]);
+
+    useEffect(() => {
+        if (isHistoryOpen && chatContainerRef.current) {
+            const checkPosition = () => {
+                const container = chatContainerRef.current;
+                if (container) {
+                    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 10;
+                    shouldAutoScroll.current = isAtBottom;
+                }
+            };
+            setTimeout(checkPosition, 50);
+        }
+    }, [isHistoryOpen]);
 
     useEffect(() => {
         if (warningMessage) {
@@ -206,27 +240,36 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
     }, [warningMessage]);
 
     const handleSubmit = () => {
+        if (!input.trim()) {
+            return;
+        }
+
         const now = Date.now();
         if (now - lastMessageTime.current < COOLDOWN_TIME) {
             setWarningMessage("Slow down! You're typing too fast");
             return;
         }
 
-        if (input.trim()) {
-            push(ref(database, `publicRooms/${roomId}/messages`), {
-                username: username,
-                text: input,
-                timestamp: now
-            });
-            setInput('');
-            lastMessageTime.current = now;
-            setWarningMessage("");
-            inputRef.current?.blur();
-        }
+        push(ref(database, `publicRooms/${roomId}/messages`), {
+            username: username,
+            text: input,
+            timestamp: now
+        });
+        setInput('');
+        lastMessageTime.current = now;
+        setWarningMessage("");
+        inputRef.current?.blur();
+        shouldAutoScroll.current = true;
     };
 
     const sendMessage = (e) => {
         if(e.key === "Enter") handleSubmit();   
+    };
+
+    const handleChatScroll = (e) => {
+        const container = e.target;
+        const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 10;
+        shouldAutoScroll.current = isAtBottom;
     };
 
     const handleMouseMove = (e) => {
@@ -235,16 +278,48 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
         }
     };
 
+    const getRoomStyle = () => {
+        const baseStyle = {
+            height: '100vh',
+            overflow: 'hidden',
+            position: 'relative',
+            backgroundColor: '#ffffffff',
+        };
+
+        // If the room is 'plaza', add the background image
+        if (roomId === 'plaza') {
+            return {
+                ...baseStyle,
+                backgroundImage: 'url("/images/Town_Image.png")', // Path relative to public folder
+                backgroundSize: 'contain',   // Ensures image covers screen without distortion (crops)
+                backgroundPosition: 'center', // Centers the image
+                backgroundRepeat: 'no-repeat'
+            };
+        }
+
+        return baseStyle;
+    };
+
     return (
         <div 
-            style={{ 
-                minHeight: '100vh', 
-                paddingBottom: '100px', 
-                position: 'relative' 
-            }}
+            style={getRoomStyle()}
             onMouseMove={handleMouseMove}
             onMouseUp={() => setIsDragging(false)}
         >
+            {warningMessage && (
+                <div style={{
+                    position: 'fixed', top: '20px', left: '50%',
+                    transform: 'translateX(-50%)',
+                    padding: '10px 20px',
+                    backgroundColor: '#fff3cd', color: '#856404',
+                    borderRadius: '8px', fontSize: '14px',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.2)',
+                    zIndex: 10001
+                }}>
+                    {warningMessage}
+                </div>
+            )}
+
             <div className="ui-element" style={{
                 position: 'fixed', top: '20px', left: '20px',
                 display: 'flex', flexDirection: 'column', gap: '10px',
@@ -279,20 +354,10 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
                 </button>
             </div>
 
-            <h1 style={{ textAlign: 'center', marginTop: '20px' }}>
-                {roomId.charAt(0).toUpperCase() + roomId.slice(1)} Room
-            </h1>
+            {/* <h1 style={{ textAlign: 'center', marginTop: '20px' }}>
+                {roomId.charAt(0).toUpperCase() + roomId.slice(1)} Rooom
+            </h1> */}
 
-            <div style={{
-                position: 'fixed', bottom: '100px', left: '20px',
-                backgroundColor: 'rgba(0,0,0,0.7)', color: 'white',
-                padding: '10px', borderRadius: '5px', fontSize: '12px',
-                zIndex: 10000
-            }}>
-                Use <strong>WASD</strong> to move
-            </div>
-
-            {/* RENDER AVATARS - Position-based z-index */}
             {Object.entries(users).map(([userId, userData]) => (
                 <Avatar
                     key={userId}
@@ -304,7 +369,6 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
                 />
             ))}
 
-            {/* RENDER BUBBLES SEPARATELY - Counter-based z-index */}
             {Object.entries(users).map(([userId, userData]) => {
                 const message = userMessages[userData.username];
                 if (!message) return null;
@@ -368,7 +432,11 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
                         <button onClick={() => setIsHistoryOpen(false)} style={{ padding: '2px 8px' }}>✕</button>
                     </div>
                     
-                    <div style={{ flex: 1, padding: '10px', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+                    <div 
+                        ref={chatContainerRef}
+                        onScroll={handleChatScroll}
+                        style={{ flex: 1, padding: '10px', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}
+                    >
                         {messages.length === 0 ? <p style={{ color: '#999' }}>No messages yet</p> : (
                             <>
                                 {messages.map(msg => (
@@ -397,7 +465,13 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
             {!isHistoryOpen && (
                 <button 
                     className="ui-element"
-                    onClick={() => setIsHistoryOpen(true)}
+                    onClick={() => {
+                        setIsHistoryOpen(true);
+                        setTimeout(() => {
+                            messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+                            shouldAutoScroll.current = true;
+                        }, 100);
+                    }}
                     style={{
                         position: 'fixed', top: '20px', right: '20px',
                         padding: '10px 20px', backgroundColor: '#4CAF50',
@@ -411,20 +485,10 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
             
             <div className="ui-element" style={{ 
                 position: 'fixed', bottom: '0', left: '0', right: '0',
-                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
                 padding: '20px', backgroundColor: 'white', borderTop: '1px solid #ccc',
                 zIndex: 10000
             }}>
-                {warningMessage && (
-                    <div style={{
-                        marginBottom: '10px', padding: '8px 16px',
-                        backgroundColor: '#fff3cd', color: '#856404',
-                        borderRadius: '4px', fontSize: '14px'
-                    }}>
-                        {warningMessage}
-                    </div>
-                )}
-                
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <input
                         ref={inputRef}
