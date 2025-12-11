@@ -70,13 +70,6 @@ Profile:
 
 
 PROBLEMS THATS OCCURING WITH THE CHAR:
--If a player types something and a message bubble appears, and a new player joing the room, 
-the new player cannot see the message bubble
--All message bubbles should dissapear afte 10 seconds 
-
-
--Make players closer to the screen appear in front over people who are further back. 
-
 
 
 AESTHETICS:
@@ -86,3 +79,13 @@ AESTHETICS:
 -gradients 
 -3ds objects 
 -3d text
+
+
+TODO:
+-In the message history chat, make it such when a player is midway through the chat history,
+ and someone types, it doesnt go down to the newer messages, it just stays where the user 
+ is reading the chat history
+
+Thing to add:
+- filtering words
+- we need a way to filter out sql attacks

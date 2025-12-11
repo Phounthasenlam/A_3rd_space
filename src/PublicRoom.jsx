@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { database } from './firebase';
 import { ref, push, onValue, query, limitToLast, set, remove, onDisconnect } from 'firebase/database';
+import Avatar from './Avatar';
 
 export default function PublicRoom({ username, roomId, onChangeRoom }) {
     const [messages, setMessages] = useState([]);
@@ -13,32 +14,27 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
     const lastMessageTime = useRef(0);
     const inputRef = useRef(null);
     
-    // Track when we joined the current room
     const joinedAt = useRef(Date.now());
     
-    // Avatar system state
     const [users, setUsers] = useState({});
     const [myPosition, setMyPosition] = useState({ x: 400, y: 300 });
     const [myColor] = useState(`#${Math.floor(Math.random()*16777215).toString(16)}`);
     const [userMessages, setUserMessages] = useState({});
     const keysPressed = useRef(new Set());
+    const messageCounter = useRef(0);
     
     const MAX_MESSAGES = 30;
     const COOLDOWN_TIME = 500;
     const MOVE_SPEED = 5;
     const BUBBLE_DURATION = 10000;
 
-    // FIX 1: CLEAR DATA & RESET TIMER ON ROOM SWITCH
     useEffect(() => {
-        // Reset the "Join Time" anchor.
         joinedAt.current = Date.now();
-        
         setUsers({});
         setMessages([]);
         setUserMessages({});
     }, [roomId]);
 
-    // LISTEN FOR MESSAGES
     useEffect(() => {
         const messagesRef = ref(database, `publicRooms/${roomId}/messages`);
         const messagesQuery = query(messagesRef, limitToLast(MAX_MESSAGES));
@@ -49,30 +45,23 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
                 const messageList = Object.entries(data).map(([id, msg]) => ({
                     id,
                     ...msg
-                }));
+                })).sort((a, b) => a.timestamp - b.timestamp); // Sort by timestamp to assign z-index in order
                 setMessages(messageList);
                 
-                // Recalculate bubbles
                 const now = Date.now();
                 const newActiveBubbles = {};
 
                 messageList.forEach(msg => {
-                    // Check 1: Is the message recent enough to be a bubble?
                     const isRecent = (now - msg.timestamp < BUBBLE_DURATION);
-                    
-                    // Check 2: Is this MY message?
                     const isMe = msg.username === username;
-
-                    // Check 3: Did this message happen after I joined this session?
                     const isNewSinceJoin = (msg.timestamp > joinedAt.current);
 
-                    // LOGIC FIX:
-                    // 1. If it's NOT me, show it (as long as it's recent).
-                    // 2. If it IS me, only show it if I typed it during this session (isNewSinceJoin).
                     if (isRecent && (!isMe || isNewSinceJoin)) {
+                        messageCounter.current += 1;
                         newActiveBubbles[msg.username] = {
                             text: msg.text,
-                            timestamp: msg.timestamp
+                            timestamp: msg.timestamp,
+                            zIndex: 5000 + messageCounter.current
                         };
                     }
                 });
@@ -85,9 +74,8 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
         });
 
         return () => unsubscribe();
-    }, [roomId, username]); // Added username to dependency array just in case
+    }, [roomId, username]);
 
-    // BUBBLE CLEANUP INTERVAL
     useEffect(() => {
         const interval = setInterval(() => {
             const now = Date.now();
@@ -106,7 +94,6 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
         return () => clearInterval(interval);
     }, []);
 
-    // LISTEN FOR USERS
     useEffect(() => {
         const usersRef = ref(database, `publicRooms/${roomId}/users`);
         
@@ -116,7 +103,7 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
                 const now = Date.now();
                 const activeUsers = {};
                 Object.entries(data).forEach(([userId, userData]) => {
-                    if (now - userData.lastSeen < 30000) {
+                    if (now - userData.lastSeen < 900000) {
                         activeUsers[userId] = userData;
                     }
                 });
@@ -129,7 +116,6 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
         return () => unsubscribe();
     }, [roomId]);
 
-    // WASD MOVEMENT
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.key === 'Enter' && document.activeElement.tagName !== 'INPUT') {
@@ -178,7 +164,6 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
         };
     }, []);
 
-    // UPDATE MY POSITION & HANDLE DISCONNECTS
     useEffect(() => {
         const myUserRef = ref(database, `publicRooms/${roomId}/users/${username}`);
         
@@ -209,12 +194,10 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
         };
     }, [roomId, username, myPosition.x, myPosition.y, myColor]);
 
-    // SCROLL TO BOTTOM
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    // WARNING TIMEOUT
     useEffect(() => {
         if (warningMessage) {
             const timer = setTimeout(() => setWarningMessage(""), 3000);
@@ -262,11 +245,10 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
             onMouseMove={handleMouseMove}
             onMouseUp={() => setIsDragging(false)}
         >
-            {/* NAV BAR */}
             <div className="ui-element" style={{
                 position: 'fixed', top: '20px', left: '20px',
                 display: 'flex', flexDirection: 'column', gap: '10px',
-                zIndex: 1000, backgroundColor: 'white', padding: '15px',
+                zIndex: 10000, backgroundColor: 'white', padding: '15px',
                 borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
             }}>
                 <h3 style={{ margin: 0, fontSize: '14px' }}>Rooms:</h3>
@@ -304,12 +286,13 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
             <div style={{
                 position: 'fixed', bottom: '100px', left: '20px',
                 backgroundColor: 'rgba(0,0,0,0.7)', color: 'white',
-                padding: '10px', borderRadius: '5px', fontSize: '12px'
+                padding: '10px', borderRadius: '5px', fontSize: '12px',
+                zIndex: 10000
             }}>
                 Use <strong>WASD</strong> to move
             </div>
 
-            {/* AVATARS */}
+            {/* RENDER AVATARS - Position-based z-index */}
             {Object.entries(users).map(([userId, userData]) => (
                 <Avatar
                     key={userId}
@@ -318,18 +301,63 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
                     y={userData.y}
                     color={userData.color}
                     isCurrentUser={userData.username === username}
-                    lastMessage={userMessages[userData.username]?.text}
                 />
             ))}
 
-            {/* CHAT HISTORY */}
+            {/* RENDER BUBBLES SEPARATELY - Counter-based z-index */}
+            {Object.entries(users).map(([userId, userData]) => {
+                const message = userMessages[userData.username];
+                if (!message) return null;
+                
+                return (
+                    <div
+                        key={`bubble-${userId}`}
+                        style={{
+                            position: 'absolute',
+                            left: userData.x,
+                            top: userData.y - 145,
+                            transform: 'translateX(-50%)',
+                            maxWidth: '200px',
+                            width: 'max-content',
+                            overflowWrap: 'break-word',
+                            wordWrap: 'break-word',
+                            hyphens: 'auto',
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            border: '2px solid #333',
+                            borderRadius: '15px',
+                            padding: '8px 12px',
+                            fontSize: '13px',
+                            textAlign: 'center',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                            pointerEvents: 'none',
+                            transition: 'top 0.1s linear, left 0.1s linear',
+                            zIndex: message.zIndex
+                        }}
+                    >
+                        {message.text}
+                        <div style={{
+                            position: 'absolute',
+                            bottom: '-8px',
+                            left: '50%',
+                            marginLeft: '-8px',
+                            width: 0,
+                            height: 0,
+                            borderLeft: '8px solid transparent',
+                            borderRight: '8px solid transparent',
+                            borderTop: '8px solid white'
+                        }} />
+                    </div>
+                );
+            })}
+
             {isHistoryOpen && (
                 <div className="ui-element" style={{
                     position: 'fixed', top: '20px', right: '20px',
                     width: '350px', height: `${historyHeight}px`,
                     backgroundColor: 'white', border: '2px solid #ccc',
                     borderRadius: '8px', display: 'flex', flexDirection: 'column',
-                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)', opacity: "0.7"
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)', opacity: "0.7",
+                    zIndex: 10000
                 }}>
                     <div style={{
                         padding: '10px', backgroundColor: '#f0f0f0',
@@ -373,18 +401,19 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
                     style={{
                         position: 'fixed', top: '20px', right: '20px',
                         padding: '10px 20px', backgroundColor: '#4CAF50',
-                        color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer'
+                        color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer',
+                        zIndex: 10000
                     }}
                 >
                     Chat History
                 </button>
             )}
             
-            {/* INPUT BAR */}
             <div className="ui-element" style={{ 
                 position: 'fixed', bottom: '0', left: '0', right: '0',
                 display: 'flex', flexDirection: 'column', alignItems: 'center',
-                padding: '20px', backgroundColor: 'white', borderTop: '1px solid #ccc'
+                padding: '20px', backgroundColor: 'white', borderTop: '1px solid #ccc',
+                zIndex: 10000
             }}>
                 {warningMessage && (
                     <div style={{
@@ -408,85 +437,6 @@ export default function PublicRoom({ username, roomId, onChangeRoom }) {
                     />
                     <button onClick={handleSubmit}>Send</button>
                 </div>
-            </div>
-        </div>
-    );
-}
-
-export function Avatar({ username, x, y, color, isCurrentUser, lastMessage }) {
-    return (
-        <div style={{
-            position: 'absolute',
-            left: x,
-            top: y,
-            transform: 'translate(-50%, -100%)',
-            zIndex: 100,
-            pointerEvents: 'none'
-        }}>
-            {/* Chat bubble */}
-            {lastMessage && (
-                <div style={{
-                    position: 'absolute',
-                    bottom: '85px',
-                    left: '50%',
-                    transform: 'translateX(-50%)', 
-                    maxWidth: '250px', 
-                    width: 'max-content',
-                    overflowWrap: 'break-word',
-                    wordWrap: 'break-word',
-                    hyphens: 'auto',
-                    backgroundColor: 'white',
-                    border: '2px solid #333',
-                    borderRadius: '15px',
-                    padding: '8px 12px',
-                    fontSize: '13px',
-                    textAlign: 'center',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-                }}>
-                    {lastMessage}
-                    <div style={{
-                        position: 'absolute',
-                        bottom: '-8px',
-                        left: '50%',
-                        marginLeft: '-8px',
-                        width: 0,
-                        height: 0,
-                        borderLeft: '8px solid transparent',
-                        borderRight: '8px solid transparent',
-                        borderTop: '8px solid white'
-                    }} />
-                </div>
-            )}
-            
-            {/* Avatar circle */}
-            <div style={{
-                width: '50px',
-                height: '70px',
-                backgroundColor: color,
-                borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
-                border: isCurrentUser ? '3px solid yellow' : '3px solid white',
-                boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontWeight: 'bold',
-                fontSize: '24px'
-            }}>
-                {username[0].toUpperCase()}
-            </div>
-            
-            {/* Username label */}
-            <div style={{
-                textAlign: 'center',
-                marginTop: '5px',
-                color: 'white',
-                fontWeight: 'bold',
-                fontSize: '16px',
-                textShadow: '2px 2px 4px black',
-                whiteSpace: 'nowrap'
-            }}>
-                {username}
             </div>
         </div>
     );
