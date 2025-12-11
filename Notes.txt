@@ -64,6 +64,11 @@ Mini games
 
 
 Profile:
+-when you click on a user it shows their Profile
+-from their profile you can check out their room
+-you can see who they're friends with
+-other information they like they put up their: bio and stuff
+
 
 
 
@@ -82,9 +87,12 @@ AESTHETICS:
 
 
 TODO:
--In the message history chat, make it such when a player is midway through the chat history,
- and someone types, it doesnt go down to the newer messages, it just stays where the user 
- is reading the chat history
+-Add a loading screen
+-Add direct messaging 
+-Add a char limit to chats 
+-After some time, if the chats hasnt already been deleted in the history, they will be after 30 mins or so
+-when a player leaves(brower close) delete the player models
+-enforce unique usernames 
 
 Thing to add:
 - filtering words
