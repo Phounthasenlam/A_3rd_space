@@ -1,0 +1,68 @@
+To run the program do:
+npm run dev
+
+Libraries to use: 
+Three.js
+
+IDEAS:
+
+
+Players:
+-Players are 3d models rendered as 2d sprite 
+
+Future ideas:
+-Make player models very customizable, give them clothing and such to wear. 
+
+
+Chat:
+-Make private chat where a new text window will show up
+-make it such that you have to click on the private window to chat?
+    -Like each private chat window has its own input bar 
+
+
+Public Rooms: 
+-These are rooms that the player spawns in. 
+-They're suppose to be "3rd spaces" where players can gather and chat.
+    -Imagine like club penguin w/ the town and the plaza 
+
+Future ideas:
+-Add minigames
+
+
+
+Private Room:
+-This is the personal canavas of the creater.
+-It is a blank page where you can upload photos, change the background color/texture/style,
+ add elements like stars or circles, add text. It's pretty much like canva meets social media. 
+    -The whole idea is that its very customizable to the players needs. 
+    There are two differnt GUI: 
+        -One GUI that shows the elements that could be drag and dropped onto the page 
+        -Another GUI that shows what elemets are already on the page 
+            -This makes it easier to keep track of what elements are on the page,
+        -With elemenets you can change color, size, add texture, and lock it in place.
+            -this can be done by clicking on the element, or searching though the GUI and 
+            clicking on the elemnts
+-Players have the ability to draw in the private room too.
+
+Future ideas:
+-There are two different private rooms:
+    -Rooms where the character sprite loads in 
+    -Rooms where the character sprite does NOT load in.
+-These are useful for when player either just want to show off their social media posts without 
+ player sprites obstructing the view, or when they want the player to interact with the private room
+ (imagine like in clubpenguin with igloos)
+-Add a player prefab,, where players can upload custom sprites or elements where its Public
+ and anyone can use
+-Add interactable elements and animations (such as when clicking a like button) 
+    -or when clicking on a element (such as oven) it plays an animation - something like the sims.
+-3d elements 
+-Add elements that are very early 2000's late 90's 
+
+
+Ideas:
+Mini games
+
+
+
+
+
