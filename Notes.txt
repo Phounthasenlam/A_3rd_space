@@ -63,6 +63,26 @@ Ideas:
 Mini games
 
 
+Profile:
 
 
 
+
+
+PROBLEMS THATS OCCURING WITH THE CHAR:
+-If a player types something and a message bubble appears, and a new player joing the room, 
+the new player cannot see the message bubble
+-All message bubbles should dissapear afte 10 seconds 
+
+
+-Make players closer to the screen appear in front over people who are further back. 
+
+
+
+AESTHETICS:
+-Pixelated icons/ very grainy 
+-old windows pop up windows 
+-marquee text
+-gradients 
+-3ds objects 
+-3d text
