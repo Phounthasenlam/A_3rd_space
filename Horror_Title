@@ -1,0 +1,256 @@
+import React, { useState, useEffect, useRef } from 'react';
+
+// --- GLITCH TEXT COMPONENT ---
+const GlitchText = ({ text, onComplete }) => {
+    const [displayText, setDisplayText] = useState('');
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+{}:"<>?-=[];,./';
+    
+    useEffect(() => {
+        let frame = 0;
+        const totalFrames = 60;
+        const interval = setInterval(() => {
+            let result = '';
+            for (let i = 0; i < text.length; i++) {
+                if (frame > (i * totalFrames) / text.length) {
+                    result += text[i];
+                } else {
+                    result += chars[Math.floor(Math.random() * chars.length)];
+                }
+            }
+            setDisplayText(result);
+            frame++;
+            if (frame > totalFrames) {
+                clearInterval(interval);
+                if (onComplete) onComplete();
+            }
+        }, 40);
+        return () => clearInterval(interval);
+    }, [text]);
+
+    return (
+        <div style={{ display: 'inline-block', minWidth: '280px', minHeight: '1.2em', verticalAlign: 'bottom' }}>
+            {displayText}
+        </div>
+    );
+};
+
+export default function LoginPage({ onLogin }) {
+    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+    const [isStaringAtUser, setIsStaringAtUser] = useState(false);
+    const [isVoidActive, setIsVoidActive] = useState(false);
+    const [eyesList, setEyesList] = useState([]);
+    const [eyesAwake, setEyesAwake] = useState(false);
+
+    // --- RESTORED LOGIN STATES ---
+    const [username, setUsername] = useState("");
+    const [password, setPassword] = useState("");
+
+    const handleSubmit = () => {
+        if (username && password && onLogin) {
+            onLogin(username);
+        }
+    };
+
+    useEffect(() => {
+        document.body.style.backgroundColor = 'black';
+        document.body.style.margin = '0';
+        document.body.style.overflow = 'hidden';
+
+        const handleMouseMove = (e) => setMousePos({ x: e.clientX, y: e.clientY });
+        window.addEventListener('mousemove', handleMouseMove);
+
+        const generated = [];
+        const numEyes = 15;
+        let attempts = 0;
+        while (generated.length < numEyes && attempts < 1000) {
+            const x = Math.random() * 80 + 10;
+            const y = Math.random() * 80 + 10;
+            const distFromCenter = Math.sqrt(Math.pow(x - 50, 2) + Math.pow(y - 50, 2));
+            const tooClose = generated.some(eye => {
+                const dx = x - eye.leftNum;
+                const dy = y - eye.topNum;
+                return Math.sqrt(dx * dx + dy * dy) < 18;
+            });
+
+            if (!tooClose && distFromCenter > 25) {
+                const sX = Math.random() * 0.15 + 0.55;
+                const sY = Math.random() * 0.15 + 0.50;
+                generated.push({
+                    id: Math.random(),
+                    top: `${y}%`, left: `${x}%`,
+                    leftNum: x, topNum: y,
+                    scaleX: sX, scaleY: sY,
+                    invX: 1 / sX, invY: 1 / sY,
+                    rotation: Math.random() * 40 - 20,
+                    openDelay: Math.random() * 3000 
+                });
+            }
+            attempts++;
+        }
+        setEyesList(generated);
+
+        const runHorrorCycle = () => {
+            const nextEvent = Math.random() * 12000 + 10000;
+            setTimeout(() => {
+                if (!eyesAwake) { runHorrorCycle(); return; }
+                const chance = Math.random();
+                if (chance > 0.6) {
+                    setIsVoidActive(true);
+                    setTimeout(() => { setIsVoidActive(false); runHorrorCycle(); }, 2500);
+                } else {
+                    setIsStaringAtUser(true);
+                    setTimeout(() => { setIsStaringAtUser(false); runHorrorCycle(); }, 1500);
+                }
+            }, nextEvent);
+        };
+        runHorrorCycle();
+
+        return () => window.removeEventListener('mousemove', handleMouseMove);
+    }, [eyesAwake]);
+
+    const AnatomicalEye = ({ top, left, scaleX, scaleY, invX, invY, rotation, forceStare, voidMode, openDelay }) => {
+        const eyeRef = useRef(null);
+        const [irisPos, setIrisPos] = useState({ x: 0, y: 0 });
+        const [isBlinking, setIsBlinking] = useState(false);
+
+        useEffect(() => {
+            const blinkLogic = () => {
+                setTimeout(() => {
+                    if (!voidMode && eyesAwake) setIsBlinking(true);
+                    setTimeout(() => setIsBlinking(false), 150);
+                    blinkLogic();
+                }, Math.random() * 12000 + 4000);
+            };
+            blinkLogic();
+        }, [voidMode, eyesAwake]);
+
+        useEffect(() => {
+            if (forceStare || voidMode || !eyesAwake) {
+                setIrisPos({ x: 0, y: 0 });
+                return;
+            }
+            if (!eyeRef.current) return;
+            const rect = eyeRef.current.getBoundingClientRect();
+            const dx = (mousePos.x - (rect.left + rect.width / 2)) / 18;
+            const dy = (mousePos.y - (rect.top + rect.height / 2)) / 18;
+            const dist = Math.min(Math.sqrt(dx * dx + dy * dy), 12);
+            const angle = Math.atan2(dy, dx);
+            setIrisPos({ x: Math.cos(angle) * dist, y: Math.sin(angle) * dist });
+        }, [mousePos, forceStare, voidMode, eyesAwake]);
+
+        return (
+            <div style={{
+                position: 'absolute', top, left,
+                transform: `translate(-50%, -50%) scale(${scaleX}, ${scaleY}) rotate(${rotation}deg)`,
+                filter: 'grayscale(0.8) contrast(2.5) brightness(0.5) blur(0.3px)',
+                zIndex: voidMode ? 5 : 10,
+                transition: 'filter 0.3s ease'
+            }}>
+                <div ref={eyeRef} style={{
+                    width: '12em', height: '8em',
+                    position: 'relative', overflow: 'hidden',
+                    borderRadius: '75% 25% 75% 25% / 50% 50% 50% 50%',
+                    background: 'radial-gradient(ellipse at center, #fff 2%, #888 30%, #111 70%, #000 95%)',
+                    boxShadow: 'inset 0 0 40px #000'
+                }}>
+                    <div style={{
+                        position: 'absolute', width: '200%', height: '200%', top: '-50%', left: '-50%',
+                        background: 'conic-gradient(transparent 0deg, rgba(180,0,0,0.1) 1deg, transparent 2deg, transparent 60deg, rgba(180,0,0,0.15) 61deg, transparent 62deg)',
+                        mixBlendMode: 'multiply', opacity: 0.8
+                    }} />
+
+                    <div style={{ 
+                        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', 
+                        backgroundColor: '#000', zIndex: 100, 
+                        opacity: (!eyesAwake || isBlinking || voidMode) ? 1 : 0,
+                        transition: eyesAwake 
+                            ? `opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1) ${openDelay}ms` 
+                            : 'none'
+                    }} />
+                    
+                    <div style={{
+                        position: 'absolute', width: '2.1em', height: '2.1em', backgroundColor: '#000',
+                        borderRadius: '50%', top: '38%', left: '42%',
+                        transform: `translate(${irisPos.x}px, ${irisPos.y}px) scale(${invX}, ${invY})`,
+                        boxShadow: '0 0 5px #000', zIndex: 20
+                    }}>
+                        <div style={{ width: '3px', height: '3px', backgroundColor: '#fff', borderRadius: '50%', transform: 'translate(4px, 4px)', opacity: 0.5 }} />
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div style={{ height: '100vh', width: '100vw', backgroundColor: 'black', position: 'relative', overflow: 'hidden' }}>
+            <style>{`
+                @keyframes noise { 0% { transform: translate(0,0) } 10% { transform: translate(-1%,-1%) } 100% { transform: translate(0,0) } }
+                @keyframes scrollText { 0% { transform: translateY(0) } 100% { transform: translateY(-30px) } }
+            `}</style>
+            
+            {isVoidActive && (
+                <div style={{
+                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                    display: 'flex', flexWrap: 'wrap', gap: '10px', padding: '20px', pointerEvents: 'none', zIndex: 15,
+                    color: 'rgba(255, 0, 0, 0.6)', fontSize: '14px', fontFamily: 'monospace',
+                    animation: 'scrollText 2s linear infinite', overflow: 'hidden'
+                }}>
+                    {Array(400).fill("SOMETHING'S WRONG ").map((t, i) => <span key={i}>{t}</span>)}
+                </div>
+            )}
+
+            <div style={{
+                position: 'absolute', top: '-10%', left: '-10%', width: '120%', height: '120%',
+                backgroundImage: 'url("https://www.transparenttextures.com/patterns/stardust.png")',
+                opacity: isVoidActive ? 0.4 : 0.15, pointerEvents: 'none', zIndex: 50, 
+                animation: 'noise 0.2s steps(2) infinite',
+                filter: isVoidActive ? 'contrast(2) invert(0.1)' : 'none'
+            }} />
+
+            {eyesList.map(eye => (
+                <AnatomicalEye 
+                    key={eye.id} 
+                    {...eye} 
+                    forceStare={isStaringAtUser} 
+                    voidMode={isVoidActive} 
+                />
+            ))}
+
+            <div style={{ 
+                position: 'absolute', zIndex: 100, top: '50%', left: '50%', 
+                transform: 'translate(-50%, -50%)', textAlign: 'center',
+                filter: isVoidActive ? 'blur(2px) grayscale(1)' : 'none',
+                transition: 'filter 0.5s'
+            }}>
+                <h1 style={{ color: 'white', fontFamily: 'serif', letterSpacing: '10px', fontSize: '1rem', opacity: 0.3, marginBottom: '20px' }}>
+                    <GlitchText 
+                        text="A LITTLE CORNER" 
+                        onComplete={() => setTimeout(() => setEyesAwake(true), 800)} 
+                    />
+                </h1>
+                
+                <div style={{ padding: '30px', background: 'rgba(0,0,0,0.95)', border: '1px solid #111', display: 'flex', flexDirection: 'column', gap: '15px', width: '320px' }}>
+                    <input 
+                        placeholder="NAME" 
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        style={{ background: 'none', border: 'none', borderBottom: '1px solid #222', color: '#555', padding: '10px', textAlign: 'center', outline: 'none' }} 
+                    />
+                    <input 
+                        type="password" 
+                        placeholder="KEY" 
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        style={{ background: 'none', border: 'none', borderBottom: '1px solid #222', color: '#555', padding: '10px', textAlign: 'center', outline: 'none' }} 
+                    />
+                    <button 
+                        onClick={handleSubmit}
+                        style={{ background: 'black', border: '1px solid #222', color: '#444', padding: '10px', cursor: 'pointer', fontSize: '10px' }}
+                    >
+                        ACCESS
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
