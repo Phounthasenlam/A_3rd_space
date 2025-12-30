@@ -1,0 +1,170 @@
+import React, { useMemo, useRef, useEffect, useState } from 'react';
+import { useGLTF, Float, shaderMaterial } from '@react-three/drei';
+import { extend, useFrame } from '@react-three/fiber';
+import { RectAreaLightHelper } from 'three/examples/jsm/helpers/RectAreaLightHelper';
+import { Html } from '@react-three/drei';
+import * as THREE from 'three';
+
+// --- Custom Shader Material ---
+const StaticScreenMaterial = shaderMaterial(
+  { uTime: 0, uStrength: 0.0, uColor: new THREE.Color('#000000') },
+  `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  `
+    uniform float uTime;
+    uniform float uStrength;
+    varying vec2 vUv;
+
+    float random(vec2 st) {
+        return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+    }
+
+    void main() {
+        if (uStrength <= 0.01) discard; 
+
+        float scanline = sin(vUv.y * 200.0 + uTime * 20.0);
+        float noise = random(vUv * vec2(1.0, 100.0) + uTime);
+        float combined = noise * (0.5 + 0.5 * scanline);
+        gl_FragColor = vec4(vec3(combined), 1.0);
+    }
+  `
+);
+
+extend({ StaticScreenMaterial });
+
+export default function ComputerModel({ onPlay }) {
+    const { scene } = useGLTF('/Computer.glb');
+    const lightRef = useRef();
+    const materialRef = useRef();
+    const [showButton, setShowButton] = useState(true);
+    
+    // State management for the 20-40s cycles
+    const glitchState = useRef({
+        mode: 'WAITING', 
+        nextEventTime: 3, 
+        flickersRemaining: 0,
+    });
+    
+    const copiedScene = useMemo(() => {
+        return scene.clone();
+    }, [scene]);
+
+    // Cleanup for RectAreaLightHelper
+    useEffect(() => {
+        const light = lightRef.current; 
+        if (light) {
+            const helper = new RectAreaLightHelper(light);
+            light.add(helper);
+            return () => { 
+                if(light) light.remove(helper); 
+                helper.dispose(); 
+            };
+        }
+    }, []);
+
+    useFrame((state) => {
+        if (!materialRef.current) return;
+        
+        const T = state.clock.elapsedTime;
+        materialRef.current.uTime = T;
+
+        // --- GLITCH LOGIC ---
+        if (T > glitchState.current.nextEventTime) {
+            const gs = glitchState.current;
+
+            if (gs.mode === 'WAITING') {
+                gs.mode = 'FLICKERING';
+                gs.flickersRemaining = Math.floor(Math.random() * 3) + 1;
+                materialRef.current.uStrength = 1.0;
+                setShowButton(false);
+                gs.nextEventTime = T + (Math.random() * 0.3 + 0.1); 
+            } 
+            else if (gs.mode === 'FLICKERING') {
+                if (materialRef.current.uStrength > 0) {
+                    materialRef.current.uStrength = 0.0;
+                    gs.flickersRemaining--;
+
+                    if (gs.flickersRemaining <= 0) {
+                        gs.mode = 'WAITING';
+                        gs.nextEventTime = T + (Math.random() * 20 + 20); 
+                        setShowButton(true);
+                    } else {
+                        gs.nextEventTime = T + 0.1;
+                    }
+                } else {
+                    materialRef.current.uStrength = 1.0;
+                    setShowButton(false);
+                    gs.nextEventTime = T + (Math.random() * 0.3 + 0.1);
+                }
+            }
+        }
+    });
+
+    return (
+        <Float speed={0.5} rotationIntensity={0.5} floatIntensity={1}>
+            <primitive 
+                object={copiedScene} 
+                scale={0.00275}
+                position={[0, -0.5, 0]} 
+                rotation={[0, 3 * Math.PI / 2, 0]}
+            >
+                {/* 1. MONITOR LIGHT */}
+                <rectAreaLight
+                    ref={lightRef}
+                    width={1.15}
+                    height={0.85}
+                    intensity={2000}
+                    color={'#416376'}
+                    position={[110, 270, 90]}
+                    rotation={[-2.5 * Math.PI / 36, 4.15 * Math.PI / 3, 0]}
+                />
+
+                {/* 2. STATIC SCREEN OVERLAY */}
+                <mesh 
+                    position={[110, 270, 91]} 
+                    rotation={[-2.5 * Math.PI / 36, (4.15 * Math.PI / 3) + Math.PI, 0]}
+                >
+                    <planeGeometry args={[400, 300]} /> 
+                    <staticScreenMaterial ref={materialRef} transparent={true} />
+                </mesh>
+
+                {/* 3. ANCHORED BUTTON */}
+                {/* By putting the group here, it bobs with the primitive */}
+                <group 
+                    position={[120, 260, 80]} 
+                    rotation={[-5.0 * Math.PI / 36, (4.15 * Math.PI / 3) + Math.PI, 0]}
+                >
+                    {showButton && (
+                        <Html 
+                            transform
+                            center 
+                            distanceFactor={300} // Keeps the button scale relative to 3D space
+                        >
+                            <button 
+                                onClick={onPlay}
+                                style={{
+                                    backgroundColor: '#537d88ff',
+                                    padding: '10px 40px', 
+                                    cursor: 'pointer',
+                                    border: 'none',
+                                    color: 'white',
+                                    fontSize: '24px',
+                                    borderRadius: '4px',
+                                    boxShadow: '0 0 15px rgba(83, 125, 136, 0.5)',
+                                    transform: 'rotate(-12deg)' // Slight tilt for style
+                                }}
+                            >
+                                Play
+                            </button>
+                        </Html>
+                    )}
+                </group>
+            </primitive>
+        </Float>
+    );
+}
